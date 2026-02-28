@@ -5,7 +5,10 @@ trials = 10;
 Fs = 10e3;
 
 thermal_noise_sigma = 50e-6;
-timing_window = 100e-6;
+timing_window = 20e-6;
+
+mic_noise = 0.00;
+adc_noise = 0.15;
 
 mic_pos = [
     0 0;
@@ -15,25 +18,76 @@ mic_pos = [
     -1 -1
 ];
 num_mics = size(mic_pos, 1);
+power_const = 1/sqrt(num_mics);
 
-target_pos = [5 2];
+target_pos = [0 1];
 
-fc = 1e3;
-t = 0:1/Fs:10*2*pi*fc;
+fc = 100;
+t = 0:1/Fs:10/fc;
 x = sin(2*pi*fc*t);
 
 distances = sqrt((mic_pos(:, 1)-target_pos(1)).^2 + (mic_pos(:, 2)-target_pos(2)).^2);
 tau = distances/c;
+tau_max = max(tau);
+weights = 1./distances;
+weights = weights / norm(weights);
 
 y = zeros(size(x));
-for i = 1:num_mics
-    tau_i = tau(i);
-    delay_samples = tau_i * Fs;
-    
-    n = 0:length(x)-1;
-    delayed = interp1(n, x, n-delay_samples, 'spline', 0);
-    
-    y = y + delayed;
-end
+y_nobf = zeros(size(x));
+y_weighted_bf = zeros(size(x));
+y_clean = zeros(size(x));
+y_clean_nobf = zeros(size(x));
+y_clean_weighted_bf = zeros(size(x));
+n = 0:length(x)-1;
 
-plot(t, y);
+for i = 1:num_mics
+    delay_needed = (tau_max - tau(i) + timing_window*rand) * Fs;
+    aligned = interp1(n, x, n - delay_needed, 'spline', 0);
+    
+    delayed = channelDelay(aligned, Fs, tau(i));
+    
+    clean_sig = power_const*delayed/distances(i);
+    clean_sig_weighted = weights(i)*delayed/distances(i);
+
+    y = y + clean_sig + mic_noise*randn(size(y));
+    y_clean = y_clean + clean_sig;
+    y_weighted_bf = y_weighted_bf + clean_sig_weighted + mic_noise*randn(size(y));
+    y_clean_weighted_bf = y_clean_weighted_bf + clean_sig_weighted;
+    
+    if(i==1)
+        y_nobf = delayed/distances(i) + mic_noise*randn(size(y));
+        y_clean_nobf = delayed/distances(i);
+    end
+end
+adc = adc_noise*randn(size(y));
+
+y = y + adc;
+y_nobf = y_nobf + adc;
+y_weighted_bf = y_weighted_bf + adc;
+
+noise_bf = y - y_clean;
+noise_nobf = y_nobf - y_clean_nobf;
+noise_weighted_bf = y_weighted_bf - y_clean_weighted_bf;
+
+snr_bf = 10*log10(var(y_clean)/var(noise_bf));
+snr_nobf = 10*log10(var(y_clean_nobf)/var(noise_nobf));
+snr_weighted_bf = 10*log10(var(y_clean_weighted_bf)/var(noise_weighted_bf));
+
+gain = snr_bf - snr_nobf;
+gain_weighted = snr_weighted_bf - snr_nobf;
+
+fprintf('Weighted Beamformed SNR: %.2f dB\n', snr_weighted_bf);
+fprintf('Uniform Beamformed SNR: %.2f dB\n', snr_bf);
+fprintf('No Beamforming SNR: %.2f dB\n', snr_nobf);
+fprintf('Weighted Beamforming Gain: %.2f dB\n', gain_weighted);
+fprintf('Uniform Beamforming Gain: %.2f dB\n', gain);
+
+subplot(3,1,1);
+plot(t, y_nobf); title('No beamforming');
+ylim([-1 1]);
+subplot(3,1,2);
+plot(t, y); title('Uniform beamforming');
+ylim([-1 1]);
+subplot(3,1,3);
+plot(t, y_weighted_bf); title('Weighted beamforming');
+ylim([-1 1]);
