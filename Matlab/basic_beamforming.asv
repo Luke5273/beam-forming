@@ -1,0 +1,29 @@
+clear; close all;
+rng('shuffle');
+c = 343; %sound
+trials = 10;
+
+thermal_noise_sigma = 50e-6;
+timing_window = 100e-6;
+
+mic_pos = [
+    0 0;
+    1 1;
+    1 -1;
+    -1 1;
+    -1 -1
+];
+num_mics = size(mic_pos, 1);
+
+target_pos = [5 2];
+
+fc = 10e3;
+t = linspace(0, 10*2*pi*fc);
+
+distances = sqrt((mic_pos(:, 1)-target_pos(1)).^2 + (mic_pos(:, 2)-target_pos(2)).^2);
+tau = distances/c;
+
+y = 0;
+for i = num_mics
+    x = sin(2*pi*fc + tau(i));
+end
