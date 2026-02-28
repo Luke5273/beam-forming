@@ -20,7 +20,7 @@ mic_pos = [
 num_mics = size(mic_pos, 1);
 power_const = 1/sqrt(num_mics);
 
-target_pos = [0 1];
+target_pos = [3 2];
 
 fc = 100;
 t = 0:1/Fs:10/fc;
@@ -82,6 +82,7 @@ fprintf('No Beamforming SNR: %.2f dB\n', snr_nobf);
 fprintf('Weighted Beamforming Gain: %.2f dB\n', gain_weighted);
 fprintf('Uniform Beamforming Gain: %.2f dB\n', gain);
 
+figure;
 subplot(3,1,1);
 plot(t, y_nobf); title('No beamforming');
 ylim([-1 1]);
@@ -91,3 +92,23 @@ ylim([-1 1]);
 subplot(3,1,3);
 plot(t, y_weighted_bf); title('Weighted beamforming');
 ylim([-1 1]);
+
+figure;
+angles = -180:1:180;
+array_response = zeros(size(angles));
+
+for k = 1:length(angles)
+    a = exp(-1j*2*pi*fc/c*(mic_pos(:,1)*cosd(angles(k)) + mic_pos(:,2)*sind(angles(k))));
+    array_response(k) = abs(sum(weights .* a));
+end
+
+% Convert angles to radians for polarplot
+angles_rad = deg2rad(angles);
+
+% Plot in polar coordinates
+polarplot(angles_rad, array_response, 'LineWidth', 2);
+ax = gca;
+ax.ThetaZeroLocation = 'top';       % 0° at top
+ax.ThetaDir = 'clockwise';          % angles increase clockwise
+title('Array Response vs Angle');
+
